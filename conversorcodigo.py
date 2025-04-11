@@ -3,12 +3,13 @@ import pdfplumber
 import pandas as pd
 import re
 from io import BytesIO
-from openpyxl.styles import Font
 from openpyxl import load_workbook
+from openpyxl.styles import Font, PatternFill
 
-st.title("Conversor LRCO: PDF ➡️ Excel com Separação de Professor 📄➡️📊")
+st.title("Conversor de PDF LRCO para Excel 📄➡️📊")
 
-uploaded_files = st.file_uploader("📥 Selecione os arquivos PDF do relatório LRCO", type="pdf", accept_multiple_files=True)
+# Upload de múltiplos arquivos
+uploaded_files = st.file_uploader("Selecione os arquivos PDF", type="pdf", accept_multiple_files=True)
 
 if uploaded_files:
     dados = []
@@ -62,7 +63,7 @@ if uploaded_files:
                     registro_conteudo = registros[1] if len(registros) >= 2 else "Sem registro"
 
                     pos_registro = linha.find(registros[0]) if registros else len(linha)
-                    disciplina_bruta = linha[pos_fim_horario:pos_registro].strip()
+                    disciplina = linha[pos_fim_horario:pos_registro].strip()
 
                     dados.append([
                         data_relatorio,
@@ -70,7 +71,7 @@ if uploaded_files:
                         nome_escola,
                         turma_atual,
                         horario,
-                        disciplina_bruta,
+                        disciplina,
                         registro_aula,
                         registro_conteudo
                     ])
@@ -82,56 +83,10 @@ if uploaded_files:
     df = pd.DataFrame(dados, columns=colunas)
     df = df[~df["DISCIPLINA"].str.contains("impresso por:", case=False, na=False)]
 
-    # Separar Disciplina x Professor
-    disciplinas = []
-    professores = []
-
-    for valor in df["DISCIPLINA"]:
-        if pd.isna(valor) or valor.strip() == "":
-            disciplinas.append("")
-            professores.append("")
-            continue
-
-        palavras = valor.strip().split()
-        disciplina = []
-        professor = []
-
-        for i in range(len(palavras)):
-            if palavras[i].istitle() and i + 1 < len(palavras) and palavras[i + 1].istitle():
-                disciplina = palavras[:i]
-                professor = palavras[i:]
-                break
-        else:
-            disciplina = palavras
-            professor = []
-
-        disciplinas.append(" ".join(disciplina))
-        professores.append(" ".join(professor))
-
-    df["DISCIPLINA_SEPARADA"] = disciplinas
-    df["PROFESSOR"] = professores
-
-    st.success("✅ Conversão concluída! Veja a prévia abaixo.")
-    st.dataframe(df)
-
-    # Gera Excel com destaque
+    # Excel em memória
     output = BytesIO()
-    with pd.ExcelWriter(output, engine="openpyxl") as writer:
-        df.to_excel(writer, index=False, sheet_name="Relatório")
-        ws = writer.sheets["Relatório"]
-
-        red_font = Font(color="FF0000")
-
-        for row in ws.iter_rows(min_row=2, max_row=ws.max_row, min_col=7, max_col=8):
-            for cell in row:
-                if cell.value == "Sem registro":
-                    cell.font = red_font
-
+    df.to_excel(output, index=False)
     output.seek(0)
 
-    st.download_button(
-        "📥 Baixar Excel com separação de professor",
-        data=output,
-        file_name="relatorio_convertido_com_professor.xlsx",
-        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-    )
+    st.success("Conversão concluída! 🎉")
+    st.download_button("📥 Baixar Excel", data=output, file_name="relatorio_convertido.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
